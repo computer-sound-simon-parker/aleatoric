@@ -28,21 +28,6 @@ int line_structures[10][4] = { //positive major, negative minor
 
 int line_choices[4] = {-1, -1, -1, -1}; //index 0 is the choice for A, 1 for B, etc. stored values are indices into line_structures
 
-char *base_keys[13] = {
-  "A3",
-  "Bf3", //b flat
-  "B3",
-  "C4",
-  "Df4",
-  "D4",
-  "Ef4",
-  "E4",
-  "F4",
-  "Gf4",
-  "G4",
-  "Af4",
-  "A4"
-};
 
 float base_keys_hz[13] = { 
   220.,
@@ -60,9 +45,9 @@ float base_keys_hz[13] = {
   440.
 };
 
-
-float major_scale_transform(float freq, int delta, int debug){ //takes a starting note in [0,12] and returns the delta'th note in that major scale
-//major scale in the form w-w-h-w-w-w-h
+//takes a starting note in [0,12] and returns the delta'th note in that major scale
+float major_scale_transform(float freq, int delta, int debug){ 
+  //major scale in the form w-w-h-w-w-w-h
   if (debug){
     printf("DEBUG2: mst w freq %lf, delta %d\n", freq, delta);
   }
