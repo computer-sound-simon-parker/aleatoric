@@ -216,8 +216,8 @@ int main(int argc, char *argv[]){
   int samples_per_note = (int)SAMPLE_RATE * 60 * pow(tempo, -1) * 0.5; //eigth notes
   duration = (float)(192 * samples_per_note) / (float)SAMPLE_RATE; 
   //6 lines * 4 measures per line * 4 beats per measure * 2 notes per beat= 192 notes per song
-  int16_t melody_samples[samples_per_note];
-  int16_t base_samples[samples_per_note];
+  int16_t melody_samples[samples_per_note * 8];
+  int16_t base_samples[samples_per_note * 8];
   printf("tempo: %d, samples per note: %d\n",tempo, samples_per_note);
   //setup end ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   if (output){
@@ -231,21 +231,23 @@ int main(int argc, char *argv[]){
       int line = song_structures[song_choice][i];
       for (int j = 0; j < 4; j++){ //chord
         int chord = line_structures[line_choices[line]][j]; 
+        float base_freq = base_keys_hz[key_choice + abs(chord) - 1] / 4.;
+        for (int r = 0; r < samples_per_note * 8; r++){
+          base_samples[r] = sawtooth((float)r / (float)SAMPLE_RATE, base_freq); 
+        }
         for (int r = 0; r < 8; r++){ //notes
           float melody_freq = note(key_choice, chord, 0);
-          float base_freq = base_keys_hz[key_choice + abs(chord) - 1] / 4.;
           for (int k = 0; k < samples_per_note; k++){
-            melody_samples[k] = sawtooth((float)k / (float)SAMPLE_RATE, melody_freq);
-            base_samples[k] = sawtooth((float)k / (float)SAMPLE_RATE, base_freq); //8 eigth notes as proxy for a whole note
+            melody_samples[r * samples_per_note + k] = sawtooth((float)k / (float)SAMPLE_RATE, melody_freq);
             //add harmony
             //add drums
           }
-          if (base){
-            add_arr(melody_samples, base_samples, samples_per_note);
-          }
-          for (int k = 0; k < samples_per_note; k++){
-            write_LE(fp, melody_samples[k], 2);
-          }
+        }
+        if (base){
+          add_arr(melody_samples, base_samples, samples_per_note * 8);
+        }
+        for (int k = 0; k < samples_per_note * 8; k++){
+          write_LE(fp, melody_samples[k], 2);
         }
       }
     }
