@@ -6,10 +6,15 @@
 #include <getopt.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 
-#define SAMPLES_PER_SEC 48000
+#define SAMPLE_RATE 48000
 #define SAMPLE_BITS 16
+#define MAX_INT16 32767
+#define AMPLITUDE 0.25
+#define NUM_CHANNELS 1
 
+float duration;
 
 char song_structures[3][6] = {{0,0,1,1,2,2}, {0,1,0,1,2,3}, {0,1,2,3,3,3}};
 
@@ -106,6 +111,44 @@ float note(int key, int chord, int debug){
 }
 
 
+float sawtooth(float t, float freq) {
+    float phase = t * freq;
+    return (phase - floor(phase)) * MAX_INT16 * AMPLITUDE; 
+}
+
+//COPIED FROM PREVIOUS ASSIGNMENT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//writes num_bytes of an int to a file pointed to by fp, in little endian
+void write_LE(FILE *fp, int num, int num_bytes){
+  char byte;
+  for (int i = 0; i < num_bytes; i++){
+    byte = (num >> 8*i) & 0xff;
+    fwrite(&byte, 1, 1, fp);
+  }
+}
+
+//writes a string to the file pointed to by f
+void write_str(FILE *fp, char *str){
+  fwrite(str, strlen(str), 1, fp);
+}
+
+//writes a wav header to fp
+void write_header(FILE *fp){
+  write_str(fp, "RIFF");
+  write_LE(fp, (44 + (NUM_CHANNELS*SAMPLE_RATE*duration*SAMPLE_BITS/8)) - 8, 4);
+  write_str(fp, "WAVE");
+  write_str(fp, "fmt ");
+  write_LE(fp, 16, 4);
+  write_LE(fp, 1, 2);
+  write_LE(fp, NUM_CHANNELS, 2);
+  write_LE(fp, SAMPLE_RATE, 4);
+  write_LE(fp, SAMPLE_RATE*NUM_CHANNELS*SAMPLE_BITS/8, 4); //Byte rate
+  write_LE(fp, NUM_CHANNELS*SAMPLE_BITS/8, 2); //Bytes per frame
+  write_LE(fp, SAMPLE_BITS, 2);
+  write_str(fp, "data");
+  write_LE(fp,NUM_CHANNELS*SAMPLE_RATE*duration*SAMPLE_BITS/8, 4);
+}
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //adds arr2 to arr1 and stores the result in arr1
 void add_arr(int16_t arr1[], int16_t arr2[], int num){
   for (int i = 0; i < num; i++){
@@ -117,13 +160,15 @@ int main(int argc, char *argv[]){
   struct option long_opts[] = {
     {"output", required_argument, NULL, 'o'},
     {"seed", required_argument, NULL, 's'},
+    {"base", no_argument, NULL, 'b'},
     { NULL, 0, NULL, 0 }
   };
   bool output = false;
+  bool base = false;
   int opt;
   int seed = 1;
   char *output_file;
-  while ((opt = getopt_long(argc, argv, "o:s:", long_opts, NULL)) != -1) {
+  while ((opt = getopt_long(argc, argv, "o:s:b", long_opts, NULL)) != -1) {
     switch (opt) {
       case 'o':
         output = true;
@@ -131,6 +176,9 @@ int main(int argc, char *argv[]){
         break;
       case 's':
         seed = atoi(optarg); //todo, make sure optarg is a valid int. in the meantime, be good
+        break;
+      case 'b':
+        base = true;
         break;
       case '?':
         return 1;
@@ -164,37 +212,43 @@ int main(int argc, char *argv[]){
   }
 
   int key_choice = rand() % 13;
-  printf("here is the song, measure by measure, 8 notes per measure, in hz:\n");
-  printf("structure: ");
-  for (int i = 0; i < 6; i++){
-    printf("%d", song_structures[song_choice][i]);
-  }
-  printf("\n");
-  for (int i = 0; i < 4; i++){
-    printf("line %d is chords ", i);
-    for (int j = 0; j < 4; j++){
-      printf("%d ", line_structures[line_choices[i]][j]);
-    }
-    printf("\n");
-  }
-  printf("key = %d\n", key_choice);
-  for (int i = 0; i < 6; i++){
-    int line = song_structures[song_choice][i];
-    printf("line: %d\n", line);
-    for (int j = 0; j < 4; j++){
-      int chord = line_structures[line_choices[line]][j];
-      printf("\tchord: %d\n\t\t", chord);
-      for (int k = 0; k < 8; k++){
-        printf("%lf,  ", note(key_choice, chord, 0));
-      }
-      printf("\n");
-    }
-  }
-
   
+  int samples_per_note = (int)SAMPLE_RATE * 60 * pow(tempo, -1) * 0.5; //eigth notes
+  duration = (float)(192 * samples_per_note) / (float)SAMPLE_RATE; 
+  //6 lines * 4 measures per line * 4 beats per measure * 2 notes per beat= 192 notes per song
+  int16_t melody_samples[samples_per_note];
+  int16_t base_samples[samples_per_note];
+  printf("tempo: %d, samples per note: %d\n",tempo, samples_per_note);
   //setup end ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   if (output){
-    printf("the output file is %s\n", output_file);
+    FILE *fp = fopen(output_file, "wb");
+    if (fp == NULL) {
+      perror("fopen");
+      return 1;
+    }
+    write_header(fp);
+    for (int i = 0; i < 6; i++){ //line
+      int line = song_structures[song_choice][i];
+      for (int j = 0; j < 4; j++){ //chord
+        int chord = line_structures[line_choices[line]][j]; 
+        for (int r = 0; r < 8; r++){ //notes
+          float melody_freq = note(key_choice, chord, 0);
+          float base_freq = base_keys_hz[key_choice + abs(chord) - 1] / 4.;
+          for (int k = 0; k < samples_per_note; k++){
+            melody_samples[k] = sawtooth((float)k / (float)SAMPLE_RATE, melody_freq);
+            base_samples[k] = sawtooth((float)k / (float)SAMPLE_RATE, base_freq); //8 eigth notes as proxy for a whole note
+            //add harmony
+            //add drums
+          }
+          if (base){
+            add_arr(melody_samples, base_samples, samples_per_note);
+          }
+          for (int k = 0; k < samples_per_note; k++){
+            write_LE(fp, melody_samples[k], 2);
+          }
+        }
+      }
+    }
   }
   else{
     printf("normal mode\n");
