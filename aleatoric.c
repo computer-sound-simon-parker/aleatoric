@@ -16,6 +16,8 @@
 
 float duration;
 
+bool base_flag = false;
+
 char song_structures[3][6] = {{0,0,1,1,2,2}, {0,1,0,1,2,3}, {0,1,2,3,3,3}};
 
 int line_structures[10][4] = { //positive major, negative minor
@@ -49,6 +51,13 @@ float base_keys_hz[13] = {
   415.30,
   440.
 };
+
+//adds arr2 to arr1 and stores the result in arr3
+void add_arr(int16_t arr1[], int16_t arr2[], int16_t arr3[], int num){
+  for (int i = 0; i < num; i++){
+    arr3[i] = arr1[i] + arr2[i];
+  }
+}
 
 //takes a starting note in [0,12] and returns the delta'th note in that major scale
 float major_scale_transform(float freq, int delta, int debug){ 
@@ -111,9 +120,29 @@ float note(int key, int chord, int debug){
 }
 
 
-float sawtooth(float t, float freq) {
+int16_t sawtooth(float t, float freq) {
     float phase = t * freq;
     return (phase - floor(phase)) * MAX_INT16 * AMPLITUDE; 
+}
+
+//fills the array with samples of a sawtooth at the given frequency
+void fill_samples(int16_t arr[], int size, float freq){
+  for (int i = 0; i < size; i++){
+    arr[i] = sawtooth((float)i / (float)SAMPLE_RATE, freq);
+  }
+}
+
+void fill_measure(int16_t measure[], int key, int chord, int size){
+  int16_t melody[size];
+  int16_t base[size];
+  for (int i = 0; i < 8; i++){
+    fill_samples(melody + (i * (size / 8)), size / 8, note(key, chord, 0));
+  }
+  if (base_flag){
+    fill_samples(base, size, base_keys_hz[key + abs(chord) - 1] / 4.); 
+  }
+  //todo: harmony, drums
+  add_arr(melody, base, measure, size);
 }
 
 //COPIED FROM PREVIOUS ASSIGNMENT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -149,12 +178,6 @@ void write_header(FILE *fp){
 }
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-//adds arr2 to arr1 and stores the result in arr1
-void add_arr(int16_t arr1[], int16_t arr2[], int num){
-  for (int i = 0; i < num; i++){
-    arr1[i] += arr2[i];
-  }
-}
 
 int main(int argc, char *argv[]){
   struct option long_opts[] = {
@@ -164,7 +187,6 @@ int main(int argc, char *argv[]){
     { NULL, 0, NULL, 0 }
   };
   bool output = false;
-  bool base = false;
   int opt;
   int seed = 1;
   char *output_file;
@@ -178,7 +200,7 @@ int main(int argc, char *argv[]){
         seed = atoi(optarg); //todo, make sure optarg is a valid int. in the meantime, be good
         break;
       case 'b':
-        base = true;
+        base_flag = true;
         break;
       case '?':
         return 1;
@@ -213,12 +235,11 @@ int main(int argc, char *argv[]){
 
   int key_choice = rand() % 13;
   
-  int samples_per_note = (int)SAMPLE_RATE * 60 * pow(tempo, -1) * 0.5; //eigth notes
-  duration = (float)(192 * samples_per_note) / (float)SAMPLE_RATE; 
-  //6 lines * 4 measures per line * 4 beats per measure * 2 notes per beat= 192 notes per song
-  int16_t melody_samples[samples_per_note * 8];
-  int16_t base_samples[samples_per_note * 8];
-  printf("tempo: %d, samples per note: %d\n",tempo, samples_per_note);
+  int samples_per_measure = (int)SAMPLE_RATE * 60 * pow(tempo, -1) * 4; //eigth notes
+  duration = (float)(24 * samples_per_measure) / (float)SAMPLE_RATE; 
+  //6 lines * 4 measures per line = 24 measures per song
+  int16_t measure[samples_per_measure];
+  printf("tempo: %d, samples per measure: %d\n",tempo, samples_per_measure);
   //setup end ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   if (output){
     FILE *fp = fopen(output_file, "wb");
@@ -231,23 +252,9 @@ int main(int argc, char *argv[]){
       int line = song_structures[song_choice][i];
       for (int j = 0; j < 4; j++){ //chord
         int chord = line_structures[line_choices[line]][j]; 
-        float base_freq = base_keys_hz[key_choice + abs(chord) - 1] / 4.;
-        for (int r = 0; r < samples_per_note * 8; r++){
-          base_samples[r] = sawtooth((float)r / (float)SAMPLE_RATE, base_freq); 
-        }
-        for (int r = 0; r < 8; r++){ //notes
-          float melody_freq = note(key_choice, chord, 0);
-          for (int k = 0; k < samples_per_note; k++){
-            melody_samples[r * samples_per_note + k] = sawtooth((float)k / (float)SAMPLE_RATE, melody_freq);
-            //add harmony
-            //add drums
-          }
-        }
-        if (base){
-          add_arr(melody_samples, base_samples, samples_per_note * 8);
-        }
-        for (int k = 0; k < samples_per_note * 8; k++){
-          write_LE(fp, melody_samples[k], 2);
+        fill_measure(measure, key_choice, chord, samples_per_measure);
+        for (int k = 0; k < samples_per_measure; k++){
+          write_LE(fp, measure[k], 2);
         }
       }
     }
