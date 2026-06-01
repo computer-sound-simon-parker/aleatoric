@@ -74,7 +74,7 @@ void add_arr(int16_t arr1[], int16_t arr2[], int16_t arr3[], int num){
   }
 }
 
-//takes a starting note in [0,12] and returns the note delta half steps higher
+//takes a starting note frequency and returns the note delta half steps higher
 float major_scale_transform(float freq, int delta, int debug){ 
   if (debug){
     printf("DEBUG2: mst w freq %lf, delta %d\n", freq, delta);
