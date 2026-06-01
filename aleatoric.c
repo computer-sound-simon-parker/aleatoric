@@ -74,9 +74,8 @@ void add_arr(int16_t arr1[], int16_t arr2[], int16_t arr3[], int num){
   }
 }
 
-//takes a starting note in [0,12] and returns the delta'th note in that major scale
+//takes a starting note in [0,12] and returns the note delta half steps higher
 float major_scale_transform(float freq, int delta, int debug){ 
-  //major scale in the form w-w-h-w-w-w-h
   if (debug){
     printf("DEBUG2: mst w freq %lf, delta %d\n", freq, delta);
   }
@@ -123,12 +122,12 @@ float note(int key, int chord, int debug){
   }
   else{
     float scale[7] = {major_scale_transform(freq, 0, 0),
-                    major_scale_transform(freq, 1, 0),
                     major_scale_transform(freq, 2, 0),
-                    major_scale_transform(freq, 3, 0),
                     major_scale_transform(freq, 4, 0),
                     major_scale_transform(freq, 5, 0),
-                    major_scale_transform(freq, 6, 0)
+                    major_scale_transform(freq, 7, 0),
+                    major_scale_transform(freq, 9, 0),
+                    major_scale_transform(freq, 11, 0)
                   };  
     return scale[rand() % 7];
   }
