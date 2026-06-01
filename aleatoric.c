@@ -27,7 +27,7 @@ int line_structures[10][4] = { //positive major, negative minor
   {1,5,-2,5},
   {1,-6,4,5},
   {4,1,-6,4},
-  {1,5,6,-1},
+  {1,5,-6,1},
   {1,4,-4,1},
   {4,5,1,1},
   {-6,4,1,5},
@@ -35,6 +35,21 @@ int line_structures[10][4] = { //positive major, negative minor
 
 int line_choices[4] = {-1, -1, -1, -1}; //index 0 is the choice for A, 1 for B, etc. stored values are indices into line_structures
 
+char *base_keys[13] = {
+  "A3",
+  "Bb3", //b flat
+  "B3",
+  "C4",
+  "Db4",
+  "D4",
+  "Eb4",
+  "E4",
+  "F4",
+  "Gb4",
+  "G4",
+  "Ab4",
+  "A4"
+};
 
 float base_keys_hz[13] = { 
   220.,
@@ -133,16 +148,15 @@ void fill_samples(int16_t arr[], int size, float freq){
 }
 
 void fill_measure(int16_t measure[], int key, int chord, int size){
-  int16_t melody[size];
   int16_t base[size];
   for (int i = 0; i < 8; i++){
-    fill_samples(melody + (i * (size / 8)), size / 8, note(key, chord, 0));
+    fill_samples(measure + (i * (size / 8)), size / 8, note(key, chord, 0));
   }
   if (base_flag){
-    fill_samples(base, size, base_keys_hz[key + abs(chord) - 1] / 4.); 
+    fill_samples(base, size, major_scale_transform(base_keys_hz[key], abs(chord) - 1, 0) / 4.); 
+    add_arr(measure, base, measure, size);
   }
   //todo: harmony, drums
-  add_arr(melody, base, measure, size);
 }
 
 //COPIED FROM PREVIOUS ASSIGNMENT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -178,6 +192,107 @@ void write_header(FILE *fp){
 }
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+char* chord_int_to_str(int chord){
+  switch (chord){
+    case -6:
+      return "vi";
+      break;
+    case -5:
+      return "v";
+      break;
+    case -4:
+      return "iv";
+      break;
+    case -3:
+      return "iii";
+      break;
+    case -2:
+      return "ii";
+      break;
+    case -1:
+      return "i";
+      break;
+    case 6:
+      return "VI";
+      break;
+    case 5:
+      return "V";
+      break;
+    case 4:
+      return "IV";
+      break;
+    case 3:
+      return "III";
+      break;
+    case 2:
+      return "II";
+      break;
+    case 1:
+      return "I";
+      break;
+  } 
+  return NULL;
+}
+
+//opens a portaudio stream and plays all 24 measures directly
+int play_song(int song_choice, int key_choice, int samples_per_measure){
+  PaError err;
+  PaStream *stream;
+
+  err = Pa_Initialize();
+  if (err != paNoError){
+    fprintf(stderr, "Pa_Initialize error: %s\n", Pa_GetErrorText(err));
+    return 1;
+  }
+
+  PaStreamParameters out_params;
+  out_params.device = Pa_GetDefaultOutputDevice();
+  if (out_params.device == paNoDevice){
+    fprintf(stderr, "No default output device\n");
+    Pa_Terminate();
+    return 1;
+  }
+  out_params.channelCount = NUM_CHANNELS;
+  out_params.sampleFormat = paInt16;
+  out_params.suggestedLatency = Pa_GetDeviceInfo(out_params.device)->defaultLowOutputLatency;
+  out_params.hostApiSpecificStreamInfo = NULL;
+
+  err = Pa_OpenStream(&stream, NULL, &out_params, SAMPLE_RATE,
+                      paFramesPerBufferUnspecified, paClipOff, NULL, NULL);
+  if (err != paNoError){
+    fprintf(stderr, "Pa_OpenStream error: %s\n", Pa_GetErrorText(err));
+    Pa_Terminate();
+    return 1;
+  }
+
+  err = Pa_StartStream(stream);
+  if (err != paNoError){
+    fprintf(stderr, "Pa_StartStream error: %s\n", Pa_GetErrorText(err));
+    Pa_CloseStream(stream);
+    Pa_Terminate();
+    return 1;
+  }
+
+  int16_t measure[samples_per_measure];
+  for (int i = 0; i < 6; i++){
+    int line = song_structures[song_choice][i];
+    for (int j = 0; j < 4; j++){
+      int chord = line_structures[line_choices[line]][j];
+      fill_measure(measure, key_choice, chord, samples_per_measure);
+      err = Pa_WriteStream(stream, measure, samples_per_measure);
+      if (err != paNoError){
+        fprintf(stderr, "Pa_WriteStream error: %s\n", Pa_GetErrorText(err));
+        break;
+      }
+    }
+  }
+
+  Pa_StopStream(stream);
+  Pa_CloseStream(stream);
+  Pa_Terminate();
+  return 0;
+}
 
 int main(int argc, char *argv[]){
   struct option long_opts[] = {
@@ -239,7 +354,21 @@ int main(int argc, char *argv[]){
   duration = (float)(24 * samples_per_measure) / (float)SAMPLE_RATE; 
   //6 lines * 4 measures per line = 24 measures per song
   int16_t measure[samples_per_measure];
-  printf("tempo: %d, samples per measure: %d\n",tempo, samples_per_measure);
+  printf("tempo: %d, key: %s, song structure: ",tempo, base_keys[key_choice]);
+  char a[4] = {'A', 'B', 'C', 'D'};
+  for (int i = 0; i < 6; i++){
+    printf("%c", a[song_structures[song_choice][i]]);
+  }
+  printf(", ");
+  for (int i = 0; i < 4; i++){
+    printf("%c = ", a[i]);
+    for (int j = 0; j < 4; j++){
+      printf("%s ", chord_int_to_str(line_structures[line_choices[i]][j]));
+    }
+    printf(", ");
+  }
+  printf("\n");
+
   //setup end ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   if (output){
     FILE *fp = fopen(output_file, "wb");
@@ -260,6 +389,6 @@ int main(int argc, char *argv[]){
     }
   }
   else{
-    printf("normal mode\n");
+    play_song(song_choice, key_choice, samples_per_measure);
   }
 }
