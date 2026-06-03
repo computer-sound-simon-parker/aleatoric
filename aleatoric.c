@@ -75,7 +75,7 @@ void add_arr(int16_t arr1[], int16_t arr2[], int16_t arr3[], int num){
 }
 
 //takes a starting note frequency and returns the note delta half steps higher
-float major_scale_transform(float freq, int delta, int debug){ 
+float semitone_up(float freq, int delta, int debug){ 
   if (debug){
     printf("DEBUG2: mst w freq %lf, delta %d\n", freq, delta);
   }
@@ -118,16 +118,16 @@ float note(int key, int chord, int debug){
       printf("\n");
     }
     int chord_choice = chord_notes[rand() % 3];
-    return major_scale_transform(freq, chord_choice - key, 0);
+    return semitone_up(freq, chord_choice - key, 0);
   }
   else{
-    float scale[7] = {major_scale_transform(freq, 0, 0),
-                    major_scale_transform(freq, 2, 0),
-                    major_scale_transform(freq, 4, 0),
-                    major_scale_transform(freq, 5, 0),
-                    major_scale_transform(freq, 7, 0),
-                    major_scale_transform(freq, 9, 0),
-                    major_scale_transform(freq, 11, 0)
+    float scale[7] = {semitone_up(freq, 0, 0),
+                    semitone_up(freq, 2, 0),
+                    semitone_up(freq, 4, 0),
+                    semitone_up(freq, 5, 0),
+                    semitone_up(freq, 7, 0),
+                    semitone_up(freq, 9, 0),
+                    semitone_up(freq, 11, 0)
                   };  
     return scale[rand() % 7];
   }
@@ -152,7 +152,7 @@ void fill_measure(int16_t measure[], int key, int chord, int size){
     fill_samples(measure + (i * (size / 8)), size / 8, note(key, chord, 0));
   }
   if (base_flag){
-    fill_samples(base, size, major_scale_transform(base_keys_hz[key], abs(chord) - 1, 0) / 4.); 
+    fill_samples(base, size, semitone_up(base_keys_hz[key], abs(chord) - 1, 0) / 4.); 
     add_arr(measure, base, measure, size);
   }
   //todo: harmony, drums
